@@ -1,0 +1,50 @@
+---
+- name: Создать директорию для Backup fs
+  file:
+    path: /backup/media
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: '0755'
+    recurse: yes
+  become: yes
+  when: not ansible_check_mode
+
+- name: Создать директорию для Backup db
+  file:
+    path: /backup/database
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: '0755'
+    recurse: yes
+  become: yes
+  when: not ansible_check_mode
+
+- name: Скопировать скрипт восстановления файлов
+  template:
+    src: restore_fs.sh.j2
+    dest: /backup/restore_fs.sh
+    owner: ubuntu
+    group: ubuntu
+    mode: '0755'
+  become: yes
+  when: not ansible_check_mode
+
+- name: Скопировать скрипт восстановления БД
+  template:
+    src: restore_db.sh.j2
+    dest: /backup/restore_db.sh
+    owner: ubuntu
+    group: ubuntu
+    mode: '0755'
+  become: yes
+  when: not ansible_check_mode
+
+- name: Убедиться, что скрипты резервного копирования исполняемы
+  ansible.builtin.file:
+    path: "/backup/{{ item }}"
+    mode: "0755"
+  loop:
+    - "restore_fs.sh"
+    - "restore_db.sh"

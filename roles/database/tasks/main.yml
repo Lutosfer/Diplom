@@ -1,0 +1,39 @@
+---
+- name: Определяем роль сервера (мастер или реплика)
+  set_fact:
+    is_master: "{{ inventory_hostname == postgresql_master_host }}"
+    is_replica: "{{ inventory_hostname == postgresql_replica_host }}"
+
+- name: Установить PostgreSQL и необходимые пакеты
+  apt:
+    name:
+      - "postgresql-{{ postgresql_version }}"
+      - "postgresql-contrib-{{ postgresql_version }}"
+      - python3-psycopg2
+    state: present
+    update_cache: yes
+  become: yes
+  check_mode: no  # всегда ставим, иначе в check_mode пакеты не установятся
+  changed_when: false
+
+- name: Запуск и включение PostgreSQL
+  systemd:
+    name: postgresql
+    state: started
+    enabled: yes
+  become: yes
+  when: not ansible_check_mode
+
+- name: Создать пользователя Mediawiki
+  command: sudo useradd -M wiki_user
+  become: yes
+  when: not ansible_check_mode
+
+- name: Настроить мастер PostgreSQL
+  include_tasks: master.yml
+  when: is_master
+
+- name: Настроить реплику PostgreSQL
+  include_tasks: replica.yml
+  when: is_replica
+

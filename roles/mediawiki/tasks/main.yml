@@ -1,0 +1,110 @@
+---
+- name: Установить Nginx + PHP и зависимости для MediaWiki
+  apt:
+    name:
+      - nginx
+      - php
+      - php-pgsql
+      - php-xml
+      - php-mbstring
+      - php-intl
+      - php-fpm
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Скачать архив MediaWiki 1.42.1 с проверкой и повтором
+  get_url:
+    url: https://releases.wikimedia.org/mediawiki/1.42/mediawiki-1.42.1.tar.gz
+    dest: /tmp/mediawiki-1.42.1.tar.gz
+    mode: '0644'
+    force: yes
+    validate_certs: yes
+  register: download_result
+  retries: 3
+  delay: 5
+  until: download_result is succeeded
+  become: yes
+  when: not ansible_check_mode
+
+- name: Создать директорию для MediaWiki
+  file:
+    path: /var/www/mediawiki
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: '0755'
+    recurse: yes
+  become: yes
+  when: not ansible_check_mode
+
+- name: Распаковать MediaWiki 1.42.1 в целевую директорию
+  unarchive:
+    src: /tmp/mediawiki-1.42.1.tar.gz
+    dest: /var/www/mediawiki
+    remote_src: yes
+    extra_opts: [--strip-components=1]
+  become: yes
+  when: not ansible_check_mode
+
+- name: Удалить временный архив MediaWiki
+  file:
+    path: /tmp/mediawiki-1.42.1.tar.gz
+    state: absent
+  become: yes
+  when: not ansible_check_mode and download_result is succeeded
+
+- name: Создать директорию для загружаемых файлов с правильными правами
+  file:
+    path: /var/www/mediawiki
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: '0775'
+    recurse: yes
+  become: yes
+  when: not ansible_check_mode
+
+- name: Отключить дефолтный сайт nginx
+  file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  become: yes
+  when: not ansible_check_mode    
+    
+- name: Скопировать конфигурацию nginx для MediaWiki
+  template:
+    src: nginx-mediawiki.conf.j2
+    dest: /etc/nginx/sites-available/mediawiki.conf
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes
+  when: not ansible_check_mode
+
+- name: Включить сайт mediawiki в nginx (создать символическую ссылку)
+  file:
+    src: /etc/nginx/sites-available/mediawiki.conf
+    dest: /etc/nginx/sites-enabled/mediawiki.conf
+    state: link
+    force: yes
+  become: yes
+  when: not ansible_check_mode
+
+- name: Создать LocalSettings.php из шаблона
+  template:
+    src: LocalSettings.php.j2
+    dest: /var/www/mediawiki/LocalSettings.php.old
+    owner: www-data
+    group: www-data
+    mode: '0644'
+  become: yes
+  when: not ansible_check_mode
+
+- name: Перезагрузить nginx, чтобы применить изменения
+  systemd:
+    name: nginx
+    state: restarted
+  become: yes
+  when: not ansible_check_mode
+

@@ -1,0 +1,68 @@
+---
+- name: Создать директорию для Backup fs
+  file:
+    path: /backup/media
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: '0755'
+    recurse: yes
+  become: yes
+  when: not ansible_check_mode
+
+- name: Создать директорию для Backup db
+  file:
+    path: /backup/database
+    state: directory 
+    owner: ubuntu
+    group: ubuntu
+    mode: '0755'
+    recurse: yes
+  become: yes
+  when: not ansible_check_mode
+
+- name: Скопировать скрипт бэкапа файлов
+  template:
+    src: backup_fs.sh.j2
+    dest: /backup/backup_fs.sh
+    owner: ubuntu
+    group: ubuntu
+    mode: '0755'
+  become: yes
+  when: not ansible_check_mode
+
+- name: Скопировать скрипт бэкапа БД
+  template:
+    src: backup_db.sh.j2
+    dest: /backup/backup_db.sh
+    owner: ubuntu
+    group: ubuntu
+    mode: '0755'
+  become: yes
+  when: not ansible_check_mode
+
+- name: Добавить задание для резервного копирования файловой системы
+  ansible.builtin.cron:
+    name: "Ежедневное резервное копирование MediaWiki"
+    minute: "0"
+    hour: "2"
+    job: "/backup/scripts/backup_fs.sh >> /var/log/backup_fs.log 2>&1"
+    user: "ubuntu"
+    state: present
+
+- name: Добавить задание для резервного копирования базы данных
+  ansible.builtin.cron:
+    name: "Ежедневное резервное копирование MediaWiki (БД)"
+    minute: "30"
+    hour: "2"
+    job: "/backup/backup_db.sh >> /var/log/backup_db.log 2>&1"
+    user: "ubuntu"
+    state: present
+
+- name: Убедиться, что скрипты резервного копирования исполняемы
+  ansible.builtin.file:
+    path: "/backup/{{ item }}"
+    mode: "0755"
+  loop:
+    - "backup_fs.sh"
+    - "backup_db.sh"    

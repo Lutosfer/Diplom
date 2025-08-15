@@ -1,0 +1,14 @@
+# TYPE  DATABASE        USER            ADDRESS                 METHOD
+
+# Разрешаем подключения от сервера Zabbix
+host	{{ postgresql_db_name }}		{{ postgresql_db_user }}		{{ postgresql_master }}/32		md5
+host    {{ postgresql_db_name }}                {{ postgresql_db_user }}                {{ postgresql_replica }}/32              md5
+local	{{ postgresql_db_name }}		{{ postgresql_db_user }}				trust
+host	replication		{{ replication_user }}		{{ postgresql_replica }}/32		md5
+
+# Локальные подключения
+local   all             all                                     peer
+host    all             all             127.0.0.1/32            md5
+host    all             all             {{ postgresql_master }}/32               md5
+
+

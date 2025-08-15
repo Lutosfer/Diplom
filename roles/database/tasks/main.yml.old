@@ -1,0 +1,135 @@
+---
+- name: Установка PostgreSQL и зависимостей
+  apt:
+    name:
+      - postgresql
+      - postgresql-contrib
+      - python3-psycopg2
+      - libpq-dev
+      - python3-dev
+    state: present
+    update_cache: yes
+  when: inventory_hostname in groups['database_masters'] or inventory_hostname in groups['database_replicas']
+
+- name: Переподключение к хосту после установки пакетов
+  meta: reset_connection
+
+- name: Пауза для применения изменений
+  pause:
+    seconds: 10
+  when: inventory_hostname in groups['database_masters'] or inventory_hostname in groups['database_replicas']
+
+- name: Запуск и включение PostgreSQL
+  shell: |
+    systemctl start postgresql 2>/dev/null || 
+    systemctl start postgresql@* 2>/dev/null
+    systemctl enable postgresql 2>/dev/null || 
+    systemctl enable postgresql@* 2>/dev/null
+  args:
+    executable: /bin/bash
+  when: inventory_hostname in groups['database_masters'] or inventory_hostname in groups['database_replicas']
+  register: postgres_start
+  changed_when: false
+
+- name: Пауза после запуска PostgreSQL
+  pause:
+    seconds: 10
+  when: inventory_hostname in groups['database_masters'] or inventory_hostname in groups['database_replicas']
+
+- name: Найти конфигурационную директорию PostgreSQL
+  shell: |
+    if [ -d "/etc/postgresql" ]; then
+      find /etc/postgresql -name 'postgresql.conf' -printf '%h\n' | head -1
+    fi
+  args:
+    executable: /bin/bash
+  register: pg_config_dir_find
+  when: inventory_hostname in groups['database_masters'] or inventory_hostname in groups['database_replicas']
+  ignore_errors: yes
+
+- name: Установить путь к конфигурационным файлам (с проверкой)
+  set_fact:
+    postgresql_conf_dir: "{{ pg_config_dir_find.stdout | default('/etc/postgresql/14/main') }}"
+  when: inventory_hostname in groups['database_masters'] or inventory_hostname in groups['database_replicas']
+
+- name: Убедиться, что директория существует
+  shell: |
+    if [ ! -d "{{ postgresql_conf_dir }}" ]; then
+      echo "/etc/postgresql/14/main"
+    else
+      echo "{{ postgresql_conf_dir }}"
+    fi
+  args:
+    executable: /bin/bash
+  register: pg_conf_dir_check
+  when: inventory_hostname in groups['database_masters'] or inventory_hostname in groups['database_replicas']
+
+- name: Найти конфигурационные файлы PostgreSQL
+  find:
+    paths: /etc/postgresql
+    patterns: "*.conf"
+    recurse: yes
+  register: pg_config_files
+
+- name: Найти postgresql.conf
+  set_fact:
+    postgresql_conf_file: "{{ pg_config_files.files | selectattr('path', 'search', 'postgresql.conf$') | map(attribute='path') | list | first | default('') }}"
+  when: pg_config_files.files is defined
+
+- name: Найти pg_hba.conf
+  set_fact:
+    postgresql_hba_file: "{{ pg_config_files.files | selectattr('path', 'search', 'pg_hba.conf$') | map(attribute='path') | list | first | default('') }}"
+  when: pg_config_files.files is defined
+
+- name: Разрешить удалённые подключения
+  lineinfile:
+    path: "{{ postgresql_conf_file }}"
+    regexp: '^#?listen_addresses\s*='
+    line: "listen_addresses = '*'"
+    backup: yes
+  when: postgresql_conf_file != ""
+  notify: restart postgresql
+
+- name: Настроить аутентификацию
+  lineinfile:
+    path: "{{ postgresql_hba_file }}"
+    line: "host    all             all             0.0.0.0/0               md5"
+    backup: yes
+    insertafter: EOF
+  when: postgresql_hba_file != ""
+  notify: restart postgresql
+
+- name: Перезапуск PostgreSQL
+  shell: |
+    systemctl restart postgresql 2>/dev/null || 
+    systemctl restart postgresql@* 2>/dev/null
+  args:
+    executable: /bin/bash
+  when: inventory_hostname in groups['database_masters'] or inventory_hostname in groups['database_replicas']
+  register: postgres_restart
+  changed_when: false
+  ignore_errors: yes
+
+- name: Пауза после перезапуска PostgreSQL
+  pause:
+    seconds: 15
+  when: inventory_hostname in groups['database_masters'] or inventory_hostname in groups['database_replicas']
+
+- name: Создание базы данных MediaWiki
+  shell: sudo -u postgres psql -c "CREATE DATABASE {{ postgresql_db_name }};"
+  when: inventory_hostname in groups['database_masters'] or inventory_hostname in groups['database_replicas']
+  ignore_errors: yes
+  register: create_db
+  changed_when: "'already exists' not in create_db.stderr"
+
+- name: Создание пользователя MediaWiki
+  shell: sudo -u postgres psql -c "CREATE USER {{ postgresql_db_user }} WITH PASSWORD '{{ postgresql_db_password }}';"
+  when: inventory_hostname in groups['database_masters'] or inventory_hostname in groups['database_replicas']
+  ignore_errors: yes
+  register: create_user
+  changed_when: "'already exists' not in create_user.stderr"
+
+- name: Выдача прав пользователю MediaWiki
+  shell: sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE {{ postgresql_db_name }} TO {{ postgresql_db_user }};"
+  when: inventory_hostname in groups['database_masters'] or inventory_hostname in groups['database_replicas']
+  ignore_errors: yes

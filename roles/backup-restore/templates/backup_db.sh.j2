@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# Конфигурация
+BACKUP_DIR="/backup/database"
+DB_NAME="my_wiki"
+DB_USER="wiki_user"
+DB_PASSWORD="mediawikiuser"
+REMOTE_HOST="84.201.156.241"
+REMOTE_DIR="/backup/database"
+RETENTION_DAYS=7
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+BACKUP_NAME="mediawiki_db_$TIMESTAMP.sql.gz"
+
+# Создание резервной копии
+echo "[$(date)] Начало резервного копирования базы данных..."
+PGPASSWORD="$DB_PASSWORD" pg_dump -U $DB_USER -h 158.160.105.109 $DB_NAME | gzip > $BACKUP_DIR/$BACKUP_NAME
+if [ $? -ne 0 ]; then
+    echo "[$(date)] Ошибка при создании дампа базы данных!"
+    exit 1
+fi
+
+# Передача на удаленный сервер
+echo "[$(date)] Передача резервной копии на удаленный сервер..."
+scp $BACKUP_DIR/$BACKUP_NAME $REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/
+if [ $? -ne 0 ]; then
+    echo "[$(date)] Ошибка при передаче на удаленный сервер!"
+    exit 1
+fi
+
+# Удаление старых резервных копий
+echo "[$(date)] Удаление резервных копий старше $RETENTION_DAYS дней..."
+find $BACKUP_DIR -name "mediawiki_db_*.sql.gz" -mtime +$RETENTION_DAYS -exec rm -f {} \;
+ssh $REMOTE_USER@$REMOTE_HOST "find $REMOTE_DIR -name 'mediawiki_db_*.sql.gz' -mtime +$RETENTION_DAYS -exec rm -f {} \\;"
+
+echo "[$(date)] Резервное копирование базы данных завершено успешно."
+exit 0

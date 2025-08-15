@@ -1,0 +1,52 @@
+---
+- name: Настроить postgresql.conf для мастера
+  template:
+    src: postgresql.conf.j2
+    dest: "/etc/postgresql/{{ postgresql_version }}/main/postgresql.conf"
+    owner: postgres
+    group: postgres
+    mode: '0644'
+  vars:
+  notify: restart postgresql
+  become: yes
+
+- name: Настроить pg_hba.conf для мастера
+  template:
+    src: pg_hba.conf.j2
+    dest: "/etc/postgresql/{{ postgresql_version }}/main/pg_hba.conf"
+    owner: postgres
+    group: postgres
+    mode: '0640'
+  vars:
+  notify: restart postgresql
+  become: yes
+
+- name: Создание кластера PostgreSQL
+  command: pg_createcluster 14 main
+  args:
+    creates: /var/lib/postgresql/14/main
+    
+- name: Создать пользователя базы MediaWiki
+  command: sudo -i -u postgres psql -c "CREATE USER {{ postgresql_db_user }} WITH ENCRYPTED PASSWORD '{{ postgresql_db_password }}';"
+  register: create_user
+  changed_when: "'CREATE ROLE' in create_user.stdout"
+  failed_when: create_user.rc != 0 and 'already exists' not in create_user.stderr
+
+- name: Создать базу данных для MediaWiki
+  command: sudo -i -u postgres psql -c "CREATE DATABASE {{ postgresql_db_name }} OWNER {{ postgresql_db_user }};"
+  register: create_db
+  changed_when: "'CREATE DATABASE' in create_db.stdout"
+  failed_when: create_db.rc != 0 and 'already exists' not in create_db.stderr
+
+- name: Предоставить права пользователю MediaWiki
+  command: sudo -i -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE {{ postgresql_db_name }} TO {{ postgresql_db_user }};"
+  register: grant_privs
+  changed_when: "'GRANT' in grant_privs.stdout"
+  failed_when: grant_privs.rc != 0
+  ignore_errors: yes
+
+- name: Создать пользователя репликации
+  command: sudo -i -u postgres psql -c "CREATE USER {{ replication_user }} WITH REPLICATION LOGIN PASSWORD '{{ replication_password }}';"
+  register: create_replication_user
+  changed_when: "'CREATE ROLE' in create_user.stdout"
+  failed_when: create_user.rc != 0 and 'already exists' not in create_user.stderr

@@ -1,0 +1,121 @@
+---
+- name: Добавить репозиторий Zabbix
+  apt:
+    deb: "https://repo.zabbix.com/zabbix/6.4/ubuntu/pool/main/z/zabbix-release/zabbix-release_6.4-1+ubuntu22.04_all.deb"
+    state: present
+  become: yes
+
+- name: Обновить кэш пакетов после добавления репозитория
+  apt:
+    update_cache: yes
+  become: yes
+
+- name: Установить Заббикс, PostgreSQL и зависимости
+  apt:
+    name:
+      - postgresql
+      - postgresql-contrib
+      - php8.1
+      - php8.1-pgsql
+      - php8.1-fpm
+      - php8.1-gd
+      - php8.1-xml
+      - php8.1-bcmath
+      - php8.1-mbstring
+      - nginx
+      - zabbix-server-pgsql
+      - zabbix-frontend-php
+      - zabbix-nginx-conf
+      - zabbix-sql-scripts
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Настроить postgresql.conf для мастера
+  template:
+    src: postgresql.conf.j2
+    dest: /etc/postgresql/14/main/postgresql.conf
+    owner: postgres
+    group: postgres
+    mode: '0644'
+  vars:
+  notify: restart postgresql
+  become: yes
+
+- name: Настроить pg_hba.conf для мастера
+  template:
+    src: pg_hba.conf.j2
+    dest: /etc/postgresql/14/main/pg_hba.conf
+    owner: postgres
+    group: postgres
+    mode: '0640'
+  vars:
+  notify: restart postgresql
+  become: yes
+
+- name: Создать пользователя базы Zabbix
+  command: sudo -i -u postgres psql -c "CREATE USER {{ db_user }} WITH ENCRYPTED PASSWORD '{{ db_password }}';"
+  register: create_user
+  changed_when: "'CREATE ROLE' in create_user.stdout"
+  failed_when: create_user.rc != 0 and 'already exists' not in create_user.stderr
+
+- name: Создать базу данных для Zabbix
+  command: sudo -i -u postgres psql -c "CREATE DATABASE {{ db_name }} OWNER {{ db_user }};"
+  register: create_db
+  changed_when: "'CREATE DATABASE' in create_db.stdout"
+  failed_when: create_db.rc != 0 and 'already exists' not in create_db.stderr
+
+- name: Предоставить права пользователю Zabbix
+  command: sudo -i -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE {{ db_name }} TO {{ db_user }};"
+  register: grant_privs
+  changed_when: "'GRANT' in grant_privs.stdout"
+  failed_when: grant_privs.rc != 0
+  ignore_errors: yes
+
+- name: Импортировать схему Zabbix
+  shell: zcat /usr/share/zabbix-sql-scripts/postgresql/server.sql.gz | sudo -u {{ db_user }} psql -d {{ db_name }}
+
+- name: Настроить Zabbix Server конфиг
+  template:
+    src: zabbix_server.conf.j2
+    dest: /etc/zabbix/zabbix_server.conf
+  notify: restart zabbix-server
+
+- name: Настроить Nginx для Zabbix
+  template:
+    src: nginx_zabbix.conf.j2
+    dest: /etc/nginx/conf.d/zabbix.conf
+  notify: restart nginx    
+
+- name: Настроить PHP параметры для Zabbix
+  ini_file:
+    path: /etc/php/8.1/fpm/php.ini
+    section: PHP
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+  loop:
+    - { option: 'post_max_size', value: '16M' }
+    - { option: 'max_execution_time', value: '300' }
+    - { option: 'max_input_time', value: '300' }
+  notify: restart php-fpm
+    
+- name: Раскомментировать ru_RU.UTF-8 в /etc/locale.gen
+  lineinfile:
+    path: /etc/locale.gen
+    regexp: '^# ru_RU.UTF-8 UTF-8'
+    line: 'ru_RU.UTF-8 UTF-8'
+    state: present
+    backrefs: yes
+
+- name: Сгенерировать локали
+  command: locale-gen
+
+- name: Перезапустить службы Zabbix, Nginx и PHP-FPM
+  systemd:
+    name: "{{ item }}"
+    state: restarted
+  loop:
+    - zabbix-server
+    - nginx
+    - php8.1-fpm
+    - postgresql

@@ -1,0 +1,42 @@
+---
+- name: Установить пакет Zabbix агента
+  apt:
+    name: zabbix-agent
+    state: present
+
+- name: Настроить конфигурацию Zabbix агента из шаблона
+  template:
+    src: zabbix_agentd.conf.j2
+    dest: /etc/zabbix/zabbix_agentd.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart zabbix-agent
+
+- name: Настроить директорию conf
+  file:
+    path: /etc/zabbix/zabbix_agentd.d
+    state: directory
+    owner: zabbix
+    group: zabbix
+    mode: '0775'
+    recurse: yes
+  become: yes
+  when: not ansible_check_mode
+
+- name: Настроить директорию log
+  file:
+    path: /var/log/zabbix
+    state: directory
+    owner: zabbix
+    group: zabbix
+    mode: '0775'
+    recurse: yes
+  become: yes
+  when: not ansible_check_mode
+
+- name: Убедиться, что Zabbix агент запущен и включен
+  systemd:
+    name: zabbix-agent
+    state: started
+    enabled: yes

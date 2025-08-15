@@ -1,0 +1,44 @@
+---
+# МедиаВики
+sitename: "mediawiki1"
+mediawiki_domain: "wiki-omega-ltd.com"
+mediawiki_name: "MyWiki"
+mediawiki_admin_user: "wiki"
+mediawiki_admin_pass: "mediawikiuser"
+
+# База данных
+postgresql_version: "14"
+postgresql_db_name: "my_wiki"
+postgresql_db_user: "wiki_user"
+postgresql_db_password: "mediawikiuser"
+user_postgres: "postgres"
+password_postgers: "postgres"
+
+# Репликация PostgreSQL
+replication_user: "replicator"
+replication_password: "secure_replication_password"  # лучше хранить в vault
+replication_network: "0.0.0.0/0"  # сузить под свою сеть
+
+# Zabbix
+zabbix_server_port: "10051"
+zabbix_server_ip: "{{ hostvars[groups['monitoring_servers'][0]]['ansible_host'] }}"
+db_name: "zabbix"
+db_user: "zabbix"
+db_password: "zabbix1"
+
+# Бэкапы
+backup_dir: "/backup"
+backup_retention_days: 7
+
+# Имена хостов мастера и реплики
+postgresql_master_host: "web01"
+postgresql_replica_host: "web02"
+postgresql_master: "{{ hostvars[groups['database_masters'][0]]['ansible_host'] }}"
+postgresql_replica: "{{ hostvars[groups['database_replicas'][0]]['ansible_host'] }}"
+
+
+
+# IP мастера и реплики
+#postgresql_master_ip: "{{ hostvars[postgresql_master_host]['ansible_default_ipv4']['address'] }}"
+#postgresql_replica_ip: "{{ hostvars[postgresql_replica_host]['ansible_default_ipv4']['address'] }}"
+

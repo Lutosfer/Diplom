@@ -1,0 +1,25 @@
+server {
+    listen 88;
+    server_name _;
+
+    root /usr/share/zabbix;
+    index index.php index.html;
+
+    # Основная локация
+    location / {
+        try_files $uri $uri/ /index.php?$args;
+    }
+
+    # Обработка PHP файлов
+    location ~ \.php$ {
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_pass unix:/run/php/php8.1-fpm.sock;
+        fastcgi_index index.php;
+    }
+
+    # Логи
+    access_log /var/log/nginx/zabbix.access.log;
+    error_log /var/log/nginx/zabbix.error.log;
+}
+

@@ -1,0 +1,50 @@
+all:
+  vars:
+    ansible_user: ubuntu
+    ansible_python_interpreter: /usr/bin/python3
+    ansible_ssh_private_key_file: /home/s17292900/.ssh/id_ed25519
+    ansible_connection: ssh
+    ansible_become: yes
+    ansible_become_method: sudo
+    ansible_become_user: root
+    ansible_become_flags: "-i"
+
+  children:
+    load_balancers:
+      hosts:
+        nginx01:
+          ansible_host: 158.160.105.106
+
+    web_servers:
+      hosts:
+        web01:
+          ansible_host: 158.160.105.109
+        web02:
+          ansible_host: 158.160.107.153
+
+    database_masters:
+      hosts:
+        web01:
+          ansible_host: 158.160.105.109
+
+    database_replicas:
+      hosts:
+        web02:
+          ansible_host: 158.160.107.153
+
+    monitoring_servers:
+      hosts:
+        monitor01:
+          ansible_host: 84.201.156.241
+
+    zabbix_agents:
+      hosts:
+        nginx01:
+          ansible_host: 158.160.105.106
+        web01:
+          ansible_host: 158.160.105.109
+        web02:
+          ansible_host: 158.160.107.153
+        monitor01:
+          ansible_host: 84.201.156.241
+

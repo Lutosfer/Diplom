@@ -1,0 +1,8 @@
+- hosts: 
+    monitor01
+  gather_facts: yes
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+  roles:
+    - role: common
+    - role: zabbix-server

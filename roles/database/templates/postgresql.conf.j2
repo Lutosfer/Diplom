@@ -1,0 +1,14 @@
+# PostgreSQL конфигурация
+
+listen_addresses = '*'
+port = 5432
+max_connections = 100
+shared_buffers = 128MB
+logging_collector = on
+log_directory = 'pg_log'
+log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'
+data_directory = '/var/lib/postgresql/14/main'
+
+wal_level = replica
+max_wal_senders = 5
+wal_keep_size = 512MB

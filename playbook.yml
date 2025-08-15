@@ -1,0 +1,40 @@
+---
+- name: Установка общих пакетов и базовая настройка
+  hosts: all
+  gather_facts: yes
+  become: true
+  roles:
+    - common
+    - zabbix-agent
+
+- name: Настройка сервера балансировщика нагрузки
+  hosts: load_balancers
+  gather_facts: yes
+  become: true
+  roles:
+    - loadbalancer
+
+- name: Настройка основного веб-сервера и сервера базы данных
+  hosts: web01
+  gather_facts: yes
+  become: true
+  roles:
+    - mediawiki
+    - database
+    - backup-restore
+
+- name: Настройка реплики веб-сервера и базы данных
+  hosts: web02
+  gather_facts: yes
+  become: true
+  roles:
+    - mediawiki
+    - database
+
+- name: Настройка сервера мониторинга и резервного копирования
+  hosts: monitoring_servers
+  gather_facts: yes
+  become: true
+  roles:
+    - zabbix-server
+    - restore

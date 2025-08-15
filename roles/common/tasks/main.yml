@@ -1,0 +1,20 @@
+---
+- name: Обновить apt кэш
+  apt:
+    update_cache: yes
+  become: yes
+
+- name: Установить базовые пакеты
+  apt:
+    name:
+      - curl
+      - wget
+      - git
+      - unzip
+      - software-properties-common
+      - net-tools
+      - iputils-ping
+      - vim
+      - rsync
+    state: present
+  become: yes
