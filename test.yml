@@ -1,8 +1,0 @@
----
-- name: Настройка сервера мониторинга и резервного копирования
-  hosts: monitoring_servers
-  gather_facts: yes
-  become: true
-  roles:
-    - restore
-

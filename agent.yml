@@ -1,8 +1,0 @@
----
-- name: Установка общих пакетов и базовая настройка
-  hosts: all
-  gather_facts: yes
-  become: true
-  roles:
-    - common
-    - zabbix-agent
